@@ -1,4 +1,3 @@
-
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
@@ -22,7 +21,9 @@ class GenerationResult:
     time_to_first_token_seconds: float | None = None
     prompt_tokens: int | None = None
     generated_tokens: int | None = None
-
+    model_load_duration_seconds: float | None = None
+    prompt_eval_duration_seconds: float | None = None
+    generation_duration_seconds: float | None = None
 
 class InferenceRuntime(ABC):
     """Common interface implemented by inference runtimes."""
