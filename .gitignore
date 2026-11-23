@@ -18,5 +18,7 @@ venv/
 Thumbs.db
 
 # Benchmark output
-results/*
-!results/.gitkeep
+results/local/
+
+# Published benchmark results are intentionally tracked
+!results/published/

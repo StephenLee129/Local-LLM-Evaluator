@@ -45,7 +45,7 @@ def analyze_results(
     ]
 
     metric_values: dict[str, list[float]] = {
-        "total_duration_seconds": [],
+        "client_duration_seconds": [],
         "time_to_first_token_seconds": [],
         "model_load_duration_seconds": [],
         "prompt_eval_duration_seconds": [],
@@ -57,7 +57,7 @@ def analyze_results(
     for result in successful_runs:
         generation = result.generation
 
-        metric_values["total_duration_seconds"].append(
+        metric_values["client_duration_seconds"].append(
             result.duration_seconds
         )
 

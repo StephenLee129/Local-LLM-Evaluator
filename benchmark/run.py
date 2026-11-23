@@ -1,6 +1,16 @@
 from runtimes.base import GenerationRequest
 from runtimes.ollama import OllamaRuntime
+from datetime import datetime, timezone
+from time import perf_counter
+from uuid import uuid4
 
+from benchmark.models import (
+    BenchmarkConfiguration,
+    BenchmarkExecution,
+    BenchmarkMetadata,
+)
+from benchmark.environment import collect_environment
+from benchmark.persistence import save_execution
 from benchmark.runner import BenchmarkRunner
 from benchmark.analysis import analyze_results
 
@@ -14,6 +24,9 @@ BENCHMARK_ITERATIONS = 5
 
 TEMPERATURE = 0.0
 MAX_TOKENS = 150
+
+TASK_ID = "code-generation-basic"
+SCHEMA_VERSION = "1.0"
 
 
 def print_metric_statistics(metric_name, statistics):
@@ -51,13 +64,53 @@ def main():
     print(f"Measured iterations: {BENCHMARK_ITERATIONS}")
     print()
 
+    # Collect static environment metadata before benchmarking.
+    environment, warnings = collect_environment()
+
+    # Capture execution metadata.
+    execution_id = uuid4()
+    timestamp_utc = datetime.now(timezone.utc)
+    execution_start = perf_counter()
+
     warmup_summary, results = runner.run(
         request=request,
         iterations=BENCHMARK_ITERATIONS,
         warmup_runs=WARMUP_RUNS,
     )
 
+    execution_duration = perf_counter() - execution_start
+
     analysis = analyze_results(results)
+
+    # Assemble the complete benchmark execution.
+    execution = BenchmarkExecution(
+        metadata=BenchmarkMetadata(
+            execution_id=execution_id,
+            timestamp_utc=timestamp_utc,
+            schema_version=SCHEMA_VERSION,
+            execution_duration_seconds=execution_duration,
+        ),
+        configuration=BenchmarkConfiguration(
+            model=MODEL_NAME,
+            runtime=runtime.runtime_name,
+            temperature=TEMPERATURE,
+            max_tokens=MAX_TOKENS,
+            task_id=TASK_ID,
+            prompt=PROMPT,
+            warmup_runs=WARMUP_RUNS,
+            measured_iterations=BENCHMARK_ITERATIONS,
+        ),
+        environment=environment,
+        warmup_summary=warmup_summary,
+        measured_runs=results,
+        analysis=analysis,
+        warnings=warnings,
+    )
+
+    # Persist the completed execution.
+    output_path = save_execution(execution)
+
+    print(f"\nBenchmark result saved to: {output_path}")
 
     # Warmup summary
     print("Warmup summary:")

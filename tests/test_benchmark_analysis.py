@@ -92,7 +92,7 @@ def test_analyze_results_calculates_performance_metrics():
     analysis = analyze_results(results)
 
     # Client-observed durations come from BenchmarkRunResult.
-    assert analysis.metrics["total_duration_seconds"].mean == 3.0
+    assert analysis.metrics["client_duration_seconds"].mean == 3.0
 
     # Throughput uses runtime generation measurements.
     assert analysis.metrics["tokens_per_second"].mean == 35.0
@@ -119,7 +119,7 @@ def test_analyze_results_handles_missing_metrics():
 
     analysis = analyze_results(results)
 
-    assert analysis.metrics["total_duration_seconds"].mean == 2.0
+    assert analysis.metrics["client_duration_seconds"].mean == 2.0
     assert analysis.metrics["time_to_first_token_seconds"] is None
     assert analysis.metrics["tokens_per_second"] is None
 
@@ -150,8 +150,8 @@ def test_analyze_results_excludes_failed_runs_from_performance_metrics():
     analysis = analyze_results(results)
 
     # Failed request duration must not inflate successful latency.
-    assert analysis.metrics["total_duration_seconds"].count == 1
-    assert analysis.metrics["total_duration_seconds"].mean == 2.0
+    assert analysis.metrics["client_duration_seconds"].count == 1
+    assert analysis.metrics["client_duration_seconds"].mean == 2.0
 
     # The failed request is still included in reliability statistics.
     assert analysis.reliability.total_iterations == 2
@@ -189,7 +189,7 @@ def test_analyze_results_handles_multiple_error_categories():
     assert analysis.reliability.failed_duration.mean == pytest.approx(11.0 / 3.0)
 
     # There are no successful measurements to analyze.
-    assert analysis.metrics["total_duration_seconds"] is None
+    assert analysis.metrics["client_duration_seconds"] is None
     assert analysis.metrics["tokens_per_second"] is None
 
 
