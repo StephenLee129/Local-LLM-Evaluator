@@ -78,6 +78,9 @@ def main():
         warmup_runs=WARMUP_RUNS,
     )
 
+    # Include resource monitoring warnings in the execution.
+    warnings.extend(runner.warnings)
+
     execution_duration = perf_counter() - execution_start
 
     analysis = analyze_results(results)
@@ -173,6 +176,42 @@ def main():
             print(f"  Error type: {error.type}")
             print(f"  Error message: {error.message}")
 
+        # Display resource statistics for this iteration.
+        if result.resources is not None:
+            resources = result.resources
+
+            print(f"  Resource samples: {resources.sample_count}")
+
+            if resources.gpu_memory_peak_mb is not None:
+                print(
+                    f"  GPU memory peak: "
+                    f"{resources.gpu_memory_peak_mb:.2f} MB"
+                )
+
+            if resources.gpu_utilization_average_percent is not None:
+                print(
+                    f"  GPU utilization average: "
+                    f"{resources.gpu_utilization_average_percent:.2f}%"
+                )
+
+            if resources.system_ram_peak_mb is not None:
+                print(
+                    f"  System RAM peak: "
+                    f"{resources.system_ram_peak_mb:.2f} MB"
+                )
+
+    # Monitoring and environment warnings
+    if warnings:
+        print("\nBenchmark warnings:")
+        print("-" * 60)
+
+        for warning in warnings:
+            print(f"  Component: {warning.component}")
+            print(f"  Message: {warning.message}")
+
+            if warning.details:
+                print(f"  Details: {warning.details}")
 
 if __name__ == "__main__":
     main()
+    

@@ -7,6 +7,26 @@ from runtimes.base import GenerationResult
 
 
 @dataclass
+class ResourceSample:
+    timestamp_seconds: float
+    gpu_memory_used_mb: float | None = None
+    gpu_utilization_percent: float | None = None
+    system_ram_used_mb: float | None = None
+    system_ram_available_mb: float | None = None
+
+
+@dataclass
+class ResourceStatistics:
+    sample_count: int
+    gpu_memory_peak_mb: float | None = None
+    gpu_memory_baseline_mb: float | None = None
+    gpu_memory_average_mb: float | None = None
+    gpu_utilization_average_percent: float | None = None
+    gpu_utilization_peak_percent: float | None = None
+    system_ram_peak_mb: float | None = None
+    system_ram_baseline_mb: float | None = None
+
+@dataclass
 class BenchmarkMetadata:
     execution_id: UUID
     timestamp_utc: datetime
@@ -56,6 +76,7 @@ class BenchmarkRunResult:
     duration_seconds: float
     generation: GenerationResult | None = None
     error: BenchmarkError | None = None
+    resources: ResourceStatistics | None = None
 
 
 @dataclass
