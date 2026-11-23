@@ -74,11 +74,20 @@ class MetricStatistics:
     maximum: float
     standard_deviation: float | None
 
+@dataclass
+class ReliabilityStatistics:
+    total_iterations: int
+    successful_iterations: int
+    failed_iterations: int
+    success_rate: float
+    failure_rate: float
+    failed_duration: MetricStatistics | None
+    errors_by_category: dict[str, int]
 
 @dataclass
 class BenchmarkAnalysis:
     metrics: dict[str, MetricStatistics | None]
-
+    reliability: ReliabilityStatistics
 
 @dataclass
 class BenchmarkWarning:

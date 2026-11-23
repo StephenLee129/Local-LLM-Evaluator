@@ -16,6 +16,23 @@ TEMPERATURE = 0.0
 MAX_TOKENS = 150
 
 
+def print_metric_statistics(metric_name, statistics):
+    print(f"\n{metric_name}")
+
+    if statistics is None:
+        print("  No measurements available")
+        return
+
+    print(f"  Count: {statistics.count}")
+    print(f"  Mean: {statistics.mean:.4f}")
+    print(f"  Median: {statistics.median:.4f}")
+    print(f"  Min: {statistics.minimum:.4f}")
+    print(f"  Max: {statistics.maximum:.4f}")
+
+    if statistics.standard_deviation is not None:
+        print(f"  Std dev: {statistics.standard_deviation:.4f}")
+
+
 def main():
     runtime = OllamaRuntime()
     runner = BenchmarkRunner(runtime)
@@ -34,7 +51,7 @@ def main():
     print(f"Measured iterations: {BENCHMARK_ITERATIONS}")
     print()
 
-    results = runner.run(
+    warmup_summary, results = runner.run(
         request=request,
         iterations=BENCHMARK_ITERATIONS,
         warmup_runs=WARMUP_RUNS,
@@ -42,34 +59,66 @@ def main():
 
     analysis = analyze_results(results)
 
-    print("Benchmark results:")
+    # Warmup summary
+    print("Warmup summary:")
+    print("-" * 60)
+    print(f"  Requested: {warmup_summary.runs_requested}")
+    print(f"  Completed: {warmup_summary.runs_completed}")
+    print(f"  Failed: {warmup_summary.runs_failed}")
+
+    # Performance statistics
+    print("\nPerformance results:")
     print("-" * 60)
 
     for metric_name, statistics in analysis.metrics.items():
-        print(f"\n{metric_name}")
+        print_metric_statistics(metric_name, statistics)
 
-        if statistics is None:
-            print("  No measurements available")
-            continue
+    # Reliability statistics
+    reliability = analysis.reliability
 
-        print(f"  Count: {statistics.count}")
-        print(f"  Mean: {statistics.mean:.4f}")
-        print(f"  Median: {statistics.median:.4f}")
-        print(f"  Min: {statistics.minimum:.4f}")
-        print(f"  Max: {statistics.maximum:.4f}")
+    print("\nReliability results:")
+    print("-" * 60)
+    print(f"  Total iterations: {reliability.total_iterations}")
+    print(f"  Successful: {reliability.successful_iterations}")
+    print(f"  Failed: {reliability.failed_iterations}")
+    print(f"  Success rate: {reliability.success_rate:.1%}")
+    print(f"  Failure rate: {reliability.failure_rate:.1%}")
 
-        if statistics.standard_deviation is not None:
-            print(f"  Std dev: {statistics.standard_deviation:.4f}")
+    print("\nFailed request duration:")
+    print_metric_statistics(
+        "Failed request duration",
+        reliability.failed_duration,
+    )
 
+    if reliability.errors_by_category:
+        print("\nErrors by category:")
+
+        for category, count in reliability.errors_by_category.items():
+            print(f"  {category}: {count}")
+
+    # Individual iteration results
     print("\nIndividual run results:")
     print("-" * 60)
 
-    for index, result in enumerate(results, start=1):
+    for result in results:
         print(
-            f"Run {index}: "
-            f"{result.total_duration_seconds:.3f}s total, "
-            f"{result.generated_tokens} generated tokens"
+            f"Run {result.iteration}: "
+            f"{result.status.upper()} - "
+            f"{result.duration_seconds:.3f}s"
         )
+
+        if result.status == "success":
+            generation = result.generation
+
+            print(f"  Generated tokens: {generation.generated_tokens}")
+            print(f"  Output: {generation.output}")
+
+        else:
+            error = result.error
+
+            print(f"  Error category: {error.category}")
+            print(f"  Error type: {error.type}")
+            print(f"  Error message: {error.message}")
 
 
 if __name__ == "__main__":
