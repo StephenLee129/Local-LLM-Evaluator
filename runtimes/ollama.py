@@ -6,6 +6,7 @@ from runtimes.base import (
     GenerationRequest,
     GenerationResult,
     InferenceRuntime,
+    InferenceRuntimeError,
 )
 
 
@@ -60,38 +61,81 @@ class OllamaRuntime(InferenceRuntime):
 
         start_time = time.perf_counter()
 
-        with requests.post(
-            url,
-            json=payload,
-            stream=True,
-            timeout=(5, 600),
-        ) as response:
-            response.raise_for_status()
+        try:
+            with requests.post(
+                url,
+                json=payload,
+                stream=True,
+                timeout=(5, 600),
+            ) as response:
+                response.raise_for_status()
 
-            for line in response.iter_lines(
-                chunk_size=1,
-                decode_unicode=True,
-            ):
-                if not line:
-                    continue
+                for line in response.iter_lines(
+                    chunk_size=1,
+                    decode_unicode=True,
+                ):
+                    if not line:
+                        continue
 
-                chunk = json.loads(line)
+                    chunk = json.loads(line)
 
-                generated_text = chunk.get("response", "")
+                    if "error" in chunk:
+                        raise InferenceRuntimeError(
+                            category="inference",
+                            message=chunk["error"],
+                            original_type="OllamaError",
+                        )
 
-                if generated_text:
-                    if first_token_time is None:
-                        first_token_time = time.perf_counter()
+                    generated_text = chunk.get("response", "")
 
-                    output_parts.append(generated_text)
+                    if generated_text:
+                        if first_token_time is None:
+                            first_token_time = time.perf_counter()
 
-                if chunk.get("done"):
-                    prompt_tokens = chunk.get("prompt_eval_count")
-                    generated_tokens = chunk.get("eval_count")
-                    model_load_duration = chunk.get("load_duration")
-                    prompt_eval_duration = chunk.get("prompt_eval_duration")
-                    generation_duration = chunk.get("eval_duration")
-                    runtime_total_duration = chunk.get("total_duration")
+                        output_parts.append(generated_text)
+
+                    if chunk.get("done"):
+                        prompt_tokens = chunk.get("prompt_eval_count")
+                        generated_tokens = chunk.get("eval_count")
+                        model_load_duration = chunk.get("load_duration")
+                        prompt_eval_duration = chunk.get("prompt_eval_duration")
+                        generation_duration = chunk.get("eval_duration")
+                        runtime_total_duration = chunk.get("total_duration")
+
+        except requests.Timeout as exc:
+            raise InferenceRuntimeError(
+                category="timeout",
+                message=str(exc),
+                original_type=type(exc).__name__,
+            ) from exc
+
+        except requests.ConnectionError as exc:
+            raise InferenceRuntimeError(
+                category="connection",
+                message=str(exc),
+                original_type=type(exc).__name__,
+            ) from exc
+
+        except requests.HTTPError as exc:
+            raise InferenceRuntimeError(
+                category="http",
+                message=str(exc),
+                original_type=type(exc).__name__,
+            ) from exc
+
+        except json.JSONDecodeError as exc:
+            raise InferenceRuntimeError(
+                category="invalid_response",
+                message=str(exc),
+                original_type=type(exc).__name__,
+            ) from exc
+
+        except requests.RequestException as exc:
+            raise InferenceRuntimeError(
+                category="request",
+                message=str(exc),
+                original_type=type(exc).__name__,
+            ) from exc
 
         end_time = time.perf_counter()
 

@@ -39,3 +39,17 @@ class InferenceRuntime(ABC):
     def generate(self, request: GenerationRequest) -> GenerationResult:
         """Generate a response using the configured inference runtime."""
         pass
+
+class InferenceRuntimeError(Exception):
+    """Represents an error encountered during model inference."""
+
+    def __init__(
+        self,
+        category: str,
+        message: str,
+        original_type: str,
+    ):
+        super().__init__(message)
+        self.category = category
+        self.original_type = original_type
+

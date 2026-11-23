@@ -1,26 +1,7 @@
-from dataclasses import dataclass
 from statistics import mean, median, stdev
 
 from runtimes.base import GenerationResult
-
-
-@dataclass
-class MetricStatistics:
-    """Statistical summary of a benchmark metric."""
-
-    count: int
-    mean: float
-    median: float
-    minimum: float
-    maximum: float
-    standard_deviation: float | None
-
-
-@dataclass
-class BenchmarkAnalysis:
-    """Statistical analysis of benchmark results."""
-
-    metrics: dict[str, MetricStatistics | None]
+from benchmark.models import MetricStatistics, BenchmarkAnalysis
 
 
 def summarize_metric(values: list[float]) -> MetricStatistics | None:
