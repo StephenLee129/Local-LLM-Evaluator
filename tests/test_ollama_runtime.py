@@ -22,6 +22,7 @@ def test_ollama_generates_response():
     assert result.model_load_duration_seconds is not None
     assert result.prompt_eval_duration_seconds is not None
     assert result.generation_duration_seconds is not None
+    assert result.runtime_total_duration_seconds is not None
 
     print("\nGeneration result:")
     print(result)

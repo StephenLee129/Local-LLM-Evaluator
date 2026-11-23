@@ -24,6 +24,7 @@ class GenerationResult:
     model_load_duration_seconds: float | None = None
     prompt_eval_duration_seconds: float | None = None
     generation_duration_seconds: float | None = None
+    runtime_total_duration_seconds: float | None = None
 
 class InferenceRuntime(ABC):
     """Common interface implemented by inference runtimes."""

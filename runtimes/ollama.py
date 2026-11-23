@@ -8,7 +8,9 @@ from runtimes.base import (
     InferenceRuntime,
 )
 
+
 NANOSECONDS_PER_SECOND = 1_000_000_000
+
 
 def nanoseconds_to_seconds(value: int | None) -> float | None:
     """Convert nanoseconds to seconds, preserving missing values."""
@@ -22,7 +24,7 @@ def nanoseconds_to_seconds(value: int | None) -> float | None:
 class OllamaRuntime(InferenceRuntime):
     """Inference runtime adapter for Ollama."""
 
-    DEFAULT_BASE_URL = "http://localhost:11434"
+    DEFAULT_BASE_URL = "http://127.0.0.1:11434"
 
     def __init__(self, base_url: str = DEFAULT_BASE_URL):
         self.base_url = base_url.rstrip("/")
@@ -54,6 +56,7 @@ class OllamaRuntime(InferenceRuntime):
         model_load_duration = None
         prompt_eval_duration = None
         generation_duration = None
+        runtime_total_duration = None
 
         start_time = time.perf_counter()
 
@@ -65,7 +68,10 @@ class OllamaRuntime(InferenceRuntime):
         ) as response:
             response.raise_for_status()
 
-            for line in response.iter_lines(decode_unicode=True):
+            for line in response.iter_lines(
+                chunk_size=1,
+                decode_unicode=True,
+            ):
                 if not line:
                     continue
 
@@ -85,6 +91,7 @@ class OllamaRuntime(InferenceRuntime):
                     model_load_duration = chunk.get("load_duration")
                     prompt_eval_duration = chunk.get("prompt_eval_duration")
                     generation_duration = chunk.get("eval_duration")
+                    runtime_total_duration = chunk.get("total_duration")
 
         end_time = time.perf_counter()
 
@@ -105,4 +112,5 @@ class OllamaRuntime(InferenceRuntime):
             model_load_duration_seconds=nanoseconds_to_seconds(model_load_duration),
             prompt_eval_duration_seconds=nanoseconds_to_seconds(prompt_eval_duration),
             generation_duration_seconds=nanoseconds_to_seconds(generation_duration),
+            runtime_total_duration_seconds=nanoseconds_to_seconds(runtime_total_duration),
         )
