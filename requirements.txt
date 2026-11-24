@@ -2,3 +2,4 @@ pytest
 requests
 psutil
 nvidia-ml-py
+PyYAML

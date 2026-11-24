@@ -1,0 +1,20 @@
+name: basic-code-generation
+
+models:
+  - qwen2.5-coder:7b
+
+experiments:
+  - type: benchmark
+    config:
+      task_id: code-generation-basic
+      prompt: |
+        Write a Python function called `is_palindrome`
+        that accepts a string and returns True if the
+        string is a palindrome, ignoring capitalization
+        and spaces.
+
+        Include a short explanation of your implementation.
+      warmup_runs: 2
+      iterations: 5
+      temperature: 0.0
+      max_tokens: 300
