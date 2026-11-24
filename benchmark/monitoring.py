@@ -1,5 +1,6 @@
 import threading
 import time
+from datetime import datetime, timezone
 
 import psutil
 import pynvml
@@ -80,6 +81,7 @@ class ResourceMonitor:
         if self._start_time is None:
             raise RuntimeError("Resource monitor has not been started")
 
+        captured_at_utc = datetime.now(timezone.utc)
         elapsed_seconds = time.perf_counter() - self._start_time
 
         gpu_memory_used_mb = None
@@ -115,6 +117,7 @@ class ResourceMonitor:
             system_ram_available_mb=(
                 memory_info.available / BYTES_PER_MEGABYTE
             ),
+            captured_at_utc=captured_at_utc,
         )
 
     def _sampling_loop(self) -> None:
@@ -129,6 +132,75 @@ class ResourceMonitor:
                 self.errors.append(
                     f"{type(exc).__name__}: {exc}"
                 )
+
+    def capture_snapshot(self) -> ResourceSample:
+        """Capture a one-time resource snapshot without starting background monitoring."""
+
+        if self._running:
+            raise RuntimeError(
+                "Cannot capture a standalone snapshot while monitoring is running"
+            )
+
+        captured_at_utc = datetime.now(timezone.utc)
+
+        gpu_handle = None
+        nvml_initialized = False
+
+        gpu_memory_used_mb = None
+        gpu_utilization_percent = None
+
+        try:
+            pynvml.nvmlInit()
+            nvml_initialized = True
+
+            device_count = pynvml.nvmlDeviceGetCount()
+
+            if self.gpu_index < 0 or self.gpu_index >= device_count:
+                raise ValueError(
+                    f"GPU index {self.gpu_index} is invalid. "
+                    f"Detected {device_count} GPU(s)."
+                )
+
+            gpu_handle = pynvml.nvmlDeviceGetHandleByIndex(
+                self.gpu_index
+            )
+
+            memory_info = pynvml.nvmlDeviceGetMemoryInfo(gpu_handle)
+            utilization = pynvml.nvmlDeviceGetUtilizationRates(gpu_handle)
+
+            gpu_memory_used_mb = (
+                memory_info.used / BYTES_PER_MEGABYTE
+            )
+            gpu_utilization_percent = utilization.gpu
+
+        except Exception as exc:
+            self.errors.append(
+                f"GPU snapshot failed: {type(exc).__name__}: {exc}"
+            )
+
+        finally:
+            if nvml_initialized:
+                try:
+                    pynvml.nvmlShutdown()
+                except Exception as exc:
+                    self.errors.append(
+                        f"GPU shutdown failed: {type(exc).__name__}: {exc}"
+                    )
+
+        memory_info = psutil.virtual_memory()
+
+        return ResourceSample(
+            timestamp_seconds=0.0,
+            gpu_memory_used_mb=gpu_memory_used_mb,
+            gpu_utilization_percent=gpu_utilization_percent,
+            system_ram_used_mb=(
+                memory_info.used / BYTES_PER_MEGABYTE
+            ),
+            system_ram_available_mb=(
+                memory_info.available / BYTES_PER_MEGABYTE
+            ),
+            captured_at_utc=captured_at_utc,
+        )
 
     def start(self) -> None:
         """Initialize monitoring and start the background sampling thread."""
@@ -173,7 +245,7 @@ class ResourceMonitor:
             raise
 
     def stop(self) -> list[ResourceSample]:
-        """Stop sampling, release GPU resources, and return collected samples."""
+        """Stop sampling, collect a final sample, and release GPU resources."""
 
         if not self._running:
             return self.samples
@@ -184,6 +256,14 @@ class ResourceMonitor:
             if self._sampling_thread is not None:
                 self._sampling_thread.join()
 
+            # Capture one final snapshot after inference has completed.
+            try:
+                self.samples.append(self._collect_sample())
+            except Exception as exc:
+                self.errors.append(
+                    f"Final resource sampling failed: {type(exc).__name__}: {exc}"
+                )
+
         finally:
             self._sampling_thread = None
             self._running = False
@@ -191,7 +271,6 @@ class ResourceMonitor:
 
         return self.samples
 
-    
     def _calculate_statistics(self) -> ResourceStatistics:
         """Calculate aggregate resource statistics from collected samples."""
 
@@ -222,6 +301,11 @@ class ResourceMonitor:
                 sum(gpu_memory) / len(gpu_memory) if gpu_memory else None
             ),
 
+            gpu_memory_peak_delta_mb=(
+                max(gpu_memory) - gpu_memory[0]
+                if gpu_memory else None
+            ),
+
             gpu_utilization_average_percent=(
                 sum(gpu_utilization) / len(gpu_utilization)
                 if gpu_utilization else None
@@ -235,5 +319,10 @@ class ResourceMonitor:
             ),
             system_ram_peak_mb=(
                 max(system_ram) if system_ram else None
+            ),
+
+            system_ram_peak_delta_mb=(
+                max(system_ram) - system_ram[0]
+                if system_ram else None
             ),
         )

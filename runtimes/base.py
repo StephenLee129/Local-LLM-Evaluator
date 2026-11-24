@@ -52,4 +52,3 @@ class InferenceRuntimeError(Exception):
         super().__init__(message)
         self.category = category
         self.original_type = original_type
-

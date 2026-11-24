@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
 
@@ -8,12 +8,23 @@ from runtimes.base import GenerationResult
 
 @dataclass
 class ResourceSample:
+    """A snapshot of system and GPU resource usage."""
+
     timestamp_seconds: float
     gpu_memory_used_mb: float | None = None
     gpu_utilization_percent: float | None = None
     system_ram_used_mb: float | None = None
     system_ram_available_mb: float | None = None
+    captured_at_utc: datetime | None = None
 
+
+@dataclass
+class ResourceProfile:
+    """Resource measurements captured before and after model warmup."""
+
+    pre_warmup: ResourceSample
+    post_warmup: ResourceSample
+    
 
 @dataclass
 class ResourceStatistics:
@@ -21,10 +32,13 @@ class ResourceStatistics:
     gpu_memory_peak_mb: float | None = None
     gpu_memory_baseline_mb: float | None = None
     gpu_memory_average_mb: float | None = None
+    gpu_memory_peak_delta_mb: float | None = None
     gpu_utilization_average_percent: float | None = None
     gpu_utilization_peak_percent: float | None = None
     system_ram_peak_mb: float | None = None
     system_ram_baseline_mb: float | None = None
+    system_ram_peak_delta_mb: float | None = None
+
 
 @dataclass
 class BenchmarkMetadata:
@@ -95,6 +109,7 @@ class MetricStatistics:
     maximum: float
     standard_deviation: float | None
 
+
 @dataclass
 class ReliabilityStatistics:
     total_iterations: int
@@ -105,10 +120,12 @@ class ReliabilityStatistics:
     failed_duration: MetricStatistics | None
     errors_by_category: dict[str, int]
 
+
 @dataclass
 class BenchmarkAnalysis:
     metrics: dict[str, MetricStatistics | None]
     reliability: ReliabilityStatistics
+
 
 @dataclass
 class BenchmarkWarning:
@@ -126,3 +143,4 @@ class BenchmarkExecution:
     measured_runs: list[BenchmarkRunResult]
     analysis: BenchmarkAnalysis
     warnings: list[BenchmarkWarning]
+    resource_profile: ResourceProfile | None = None

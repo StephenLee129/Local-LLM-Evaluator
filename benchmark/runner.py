@@ -11,6 +11,8 @@ from benchmark.models import (
     BenchmarkError,
     BenchmarkRunResult,
     BenchmarkWarning,
+    ResourceProfile,
+    ResourceSample,
     ResourceStatistics,
     WarmupSummary,
 )
@@ -32,6 +34,34 @@ class BenchmarkRunner:
         self.runtime = runtime
         self.resource_monitor = resource_monitor or ResourceMonitor()
         self.warnings: list[BenchmarkWarning] = []
+
+    def _capture_resource_snapshot(self) -> ResourceSample | None:
+        """Capture a standalone resource snapshot on a best-effort basis."""
+
+        try:
+            snapshot = self.resource_monitor.capture_snapshot()
+
+            for error_message in self.resource_monitor.errors:
+                self.warnings.append(
+                    BenchmarkWarning(
+                        component="resource_monitor",
+                        message="Resource snapshot encountered an error.",
+                        details=error_message,
+                    )
+                )
+
+            return snapshot
+
+        except Exception as exc:
+            self.warnings.append(
+                BenchmarkWarning(
+                    component="resource_monitor",
+                    message="Resource snapshot failed.",
+                    details=f"{type(exc).__name__}: {exc}",
+                )
+            )
+
+            return None
 
     def _execute_request(
         self,
@@ -113,8 +143,12 @@ class BenchmarkRunner:
         request: GenerationRequest,
         iterations: int,
         warmup_runs: int = DEFAULT_WARMUP_RUNS,
-    ) -> tuple[WarmupSummary, list[BenchmarkRunResult]]:
-        """Run warmups followed by measured inference iterations."""
+    ) -> tuple[
+        WarmupSummary,
+        list[BenchmarkRunResult],
+        ResourceProfile | None,
+    ]:
+        """Capture resource profiles, run warmups, and measure inference."""
 
         if iterations < 1:
             raise ValueError("iterations must be at least 1")
@@ -123,6 +157,9 @@ class BenchmarkRunner:
             raise ValueError("warmup_runs cannot be negative")
 
         self.warnings.clear()
+
+        # Capture resource usage before any model warmup.
+        pre_warmup_snapshot = self._capture_resource_snapshot()
 
         warmup_completed = 0
         warmup_failed = 0
@@ -141,6 +178,20 @@ class BenchmarkRunner:
             runs_completed=warmup_completed,
             runs_failed=warmup_failed,
         )
+
+        # Capture resource usage after warmup and before measured iterations.
+        post_warmup_snapshot = self._capture_resource_snapshot()
+
+        resource_profile = None
+
+        if (
+            pre_warmup_snapshot is not None
+            and post_warmup_snapshot is not None
+        ):
+            resource_profile = ResourceProfile(
+                pre_warmup=pre_warmup_snapshot,
+                post_warmup=post_warmup_snapshot,
+            )
 
         results = []
 
@@ -162,4 +213,4 @@ class BenchmarkRunner:
 
             results.append(result)
 
-        return warmup_summary, results
+        return warmup_summary, results, resource_profile

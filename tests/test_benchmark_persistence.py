@@ -15,6 +15,8 @@ from benchmark.models import (
     GPUInfo,
     MetricStatistics,
     ReliabilityStatistics,
+    ResourceProfile,
+    ResourceSample,
     WarmupSummary,
 )
 from benchmark.persistence import (
@@ -119,6 +121,28 @@ def create_execution() -> BenchmarkExecution:
                 message="Test warning",
             )
         ],
+        resource_profile=ResourceProfile(
+            pre_warmup=ResourceSample(
+                timestamp_seconds=0.0,
+                gpu_memory_used_mb=1000.0,
+                gpu_utilization_percent=5.0,
+                system_ram_used_mb=8000.0,
+                system_ram_available_mb=24000.0,
+                captured_at_utc=datetime(
+                    2026, 11, 23, 21, 59, 50, tzinfo=timezone.utc
+                ),
+            ),
+            post_warmup=ResourceSample(
+                timestamp_seconds=0.0,
+                gpu_memory_used_mb=7000.0,
+                gpu_utilization_percent=95.0,
+                system_ram_used_mb=8500.0,
+                system_ram_available_mb=23500.0,
+                captured_at_utc=datetime(
+                    2026, 11, 23, 21, 59, 55, tzinfo=timezone.utc
+                ),
+            ),
+        ),
     )
 
 
@@ -138,6 +162,7 @@ def test_execution_to_dict_preserves_top_level_structure():
 
     assert result["results"]["warmup_summary"]["runs_completed"] == 2
     assert len(result["results"]["measured_runs"]) == 2
+    assert result["results"]["resource_profile"] is not None
 
 
 def test_execution_to_dict_preserves_success_and_failure_details():
@@ -155,6 +180,26 @@ def test_execution_to_dict_preserves_success_and_failure_details():
     assert failed_run["status"] == "failed"
     assert failed_run["generation"] is None
     assert failed_run["error"]["category"] == "timeout"
+
+
+def test_execution_to_dict_preserves_resource_profile():
+    execution = create_execution()
+
+    result = execution_to_dict(execution)
+
+    resource_profile = result["results"]["resource_profile"]
+
+    assert resource_profile["pre_warmup"]["gpu_memory_used_mb"] == 1000.0
+    assert resource_profile["post_warmup"]["gpu_memory_used_mb"] == 7000.0
+
+
+def test_execution_to_dict_handles_missing_resource_profile():
+    execution = create_execution()
+    execution.resource_profile = None
+
+    result = execution_to_dict(execution)
+
+    assert result["results"]["resource_profile"] is None
 
 
 def test_serialize_execution_produces_valid_json():
@@ -180,6 +225,23 @@ def test_serialize_execution_preserves_null_values():
     assert result["results"]["measured_runs"][0]["generation"][
         "time_to_first_token_seconds"
     ] is None
+
+
+def test_serialize_execution_preserves_resource_profile_timestamps():
+    execution = create_execution()
+
+    serialized = serialize_execution(execution)
+    result = json.loads(serialized)
+
+    resource_profile = result["results"]["resource_profile"]
+
+    assert resource_profile["pre_warmup"]["captured_at_utc"] == (
+        "2026-11-23T21:59:50+00:00"
+    )
+
+    assert resource_profile["post_warmup"]["captured_at_utc"] == (
+        "2026-11-23T21:59:55+00:00"
+    )
 
 
 def test_generate_result_filename():

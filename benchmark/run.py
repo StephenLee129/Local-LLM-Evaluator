@@ -1,8 +1,9 @@
-from runtimes.base import GenerationRequest
-from runtimes.ollama import OllamaRuntime
 from datetime import datetime, timezone
 from time import perf_counter
 from uuid import uuid4
+
+from runtimes.base import GenerationRequest
+from runtimes.ollama import OllamaRuntime
 
 from benchmark.models import (
     BenchmarkConfiguration,
@@ -46,6 +47,68 @@ def print_metric_statistics(metric_name, statistics):
         print(f"  Std dev: {statistics.standard_deviation:.4f}")
 
 
+def print_resource_profile(resource_profile):
+    """Display resource usage before and after model warmup."""
+
+    print("\nResource profile:")
+    print("-" * 60)
+
+    if resource_profile is None:
+        print("  Resource profile unavailable")
+        return
+
+    pre = resource_profile.pre_warmup
+    post = resource_profile.post_warmup
+
+    print("\n  Snapshot timestamps:")
+
+    if pre.captured_at_utc is not None:
+        print(
+            f"    Pre-warmup:  "
+            f"{pre.captured_at_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}"
+        )
+
+    if post.captured_at_utc is not None:
+        print(
+            f"    Post-warmup: "
+            f"{post.captured_at_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}"
+        )
+
+    def print_comparison(label, before, after, unit):
+        print(f"\n  {label}:")
+
+        if before is None or after is None:
+            print("    Measurements unavailable")
+            return
+
+        difference = after - before
+
+        print(f"    Pre-warmup:  {before:.2f} {unit}")
+        print(f"    Post-warmup: {after:.2f} {unit}")
+        print(f"    Difference:  {difference:+.2f} {unit}")
+
+    print_comparison(
+        "GPU memory",
+        pre.gpu_memory_used_mb,
+        post.gpu_memory_used_mb,
+        "MB",
+    )
+
+    print_comparison(
+        "System RAM",
+        pre.system_ram_used_mb,
+        post.system_ram_used_mb,
+        "MB",
+    )
+
+    print_comparison(
+        "GPU utilization",
+        pre.gpu_utilization_percent,
+        post.gpu_utilization_percent,
+        "%",
+    )
+
+
 def main():
     runtime = OllamaRuntime()
     runner = BenchmarkRunner(runtime)
@@ -72,7 +135,7 @@ def main():
     timestamp_utc = datetime.now(timezone.utc)
     execution_start = perf_counter()
 
-    warmup_summary, results = runner.run(
+    warmup_summary, results, resource_profile = runner.run(
         request=request,
         iterations=BENCHMARK_ITERATIONS,
         warmup_runs=WARMUP_RUNS,
@@ -108,6 +171,7 @@ def main():
         measured_runs=results,
         analysis=analysis,
         warnings=warnings,
+        resource_profile=resource_profile,
     )
 
     # Persist the completed execution.
@@ -116,11 +180,14 @@ def main():
     print(f"\nBenchmark result saved to: {output_path}")
 
     # Warmup summary
-    print("Warmup summary:")
+    print("\nWarmup summary:")
     print("-" * 60)
     print(f"  Requested: {warmup_summary.runs_requested}")
     print(f"  Completed: {warmup_summary.runs_completed}")
     print(f"  Failed: {warmup_summary.runs_failed}")
+
+    # Resource profile
+    print_resource_profile(resource_profile)
 
     # Performance statistics
     print("\nPerformance results:")
@@ -182,10 +249,22 @@ def main():
 
             print(f"  Resource samples: {resources.sample_count}")
 
+            if resources.gpu_memory_baseline_mb is not None:
+                print(
+                    f"  GPU memory baseline: "
+                    f"{resources.gpu_memory_baseline_mb:.2f} MB"
+                )
+
             if resources.gpu_memory_peak_mb is not None:
                 print(
                     f"  GPU memory peak: "
                     f"{resources.gpu_memory_peak_mb:.2f} MB"
+                )
+
+            if resources.gpu_memory_peak_delta_mb is not None:
+                print(
+                    f"  GPU memory peak delta: "
+                    f"{resources.gpu_memory_peak_delta_mb:.2f} MB"
                 )
 
             if resources.gpu_utilization_average_percent is not None:
@@ -194,10 +273,22 @@ def main():
                     f"{resources.gpu_utilization_average_percent:.2f}%"
                 )
 
+            if resources.system_ram_baseline_mb is not None:
+                print(
+                    f"  System RAM baseline: "
+                    f"{resources.system_ram_baseline_mb:.2f} MB"
+                )
+
             if resources.system_ram_peak_mb is not None:
                 print(
                     f"  System RAM peak: "
                     f"{resources.system_ram_peak_mb:.2f} MB"
+                )
+
+            if resources.system_ram_peak_delta_mb is not None:
+                print(
+                    f"  System RAM peak delta: "
+                    f"{resources.system_ram_peak_delta_mb:.2f} MB"
                 )
 
     # Monitoring and environment warnings
@@ -212,6 +303,6 @@ def main():
             if warning.details:
                 print(f"  Details: {warning.details}")
 
+
 if __name__ == "__main__":
     main()
-    

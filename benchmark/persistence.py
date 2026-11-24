@@ -21,6 +21,11 @@ def execution_to_dict(execution: BenchmarkExecution) -> dict:
         "environment": asdict(execution.environment),
         "results": {
             "warmup_summary": asdict(execution.warmup_summary),
+            "resource_profile": (
+                asdict(execution.resource_profile)
+                if execution.resource_profile is not None
+                else None
+            ),
             "measured_runs": [
                 asdict(run) for run in execution.measured_runs
             ],
