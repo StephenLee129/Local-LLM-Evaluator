@@ -196,3 +196,119 @@ def test_analyze_results_handles_multiple_error_categories():
 def test_analyze_results_rejects_empty_results():
     with pytest.raises(ValueError):
         analyze_results([])
+
+
+def test_analyze_results_reports_no_failures():
+    results = [
+        create_successful_run(
+            1, 1.0, GenerationResult(output="response 1", total_duration_seconds=1.0)
+        ),
+        create_successful_run(
+            2, 1.0, GenerationResult(output="response 2", total_duration_seconds=1.0)
+        ),
+    ]
+
+    reliability = analyze_results(results).reliability
+
+    assert reliability.longest_consecutive_failures == 0
+    assert reliability.failures_followed_by_success == 0
+    assert reliability.failures_followed_by_failure == 0
+    assert reliability.recovery_rate is None
+
+
+def test_analyze_results_reports_successful_recovery():
+    results = [
+        create_failed_run(1, 2.0),
+        create_successful_run(
+            2, 1.0, GenerationResult(output="recovered", total_duration_seconds=1.0)
+        ),
+    ]
+
+    reliability = analyze_results(results).reliability
+
+    assert reliability.longest_consecutive_failures == 1
+    assert reliability.failures_followed_by_success == 1
+    assert reliability.failures_followed_by_failure == 0
+    assert reliability.recovery_rate == 1.0
+
+
+def test_analyze_results_calculates_consecutive_failures():
+    results = [
+        create_successful_run(
+            1, 1.0, GenerationResult(output="response", total_duration_seconds=1.0)
+        ),
+        create_failed_run(2, 2.0),
+        create_failed_run(3, 2.0),
+        create_failed_run(4, 2.0),
+        create_successful_run(
+            5, 1.0, GenerationResult(output="recovered", total_duration_seconds=1.0)
+        ),
+        create_failed_run(6, 2.0),
+    ]
+
+    reliability = analyze_results(results).reliability
+
+    assert reliability.longest_consecutive_failures == 3
+    assert reliability.failures_followed_by_success == 1
+    assert reliability.failures_followed_by_failure == 2
+    assert reliability.recovery_rate == pytest.approx(1.0 / 3.0)
+
+
+def test_analyze_results_calculates_mixed_recovery_behavior():
+    results = [
+        create_failed_run(1, 2.0),
+        create_successful_run(
+            2, 1.0, GenerationResult(output="response", total_duration_seconds=1.0)
+        ),
+        create_failed_run(3, 2.0),
+        create_failed_run(4, 2.0),
+        create_successful_run(
+            5, 1.0, GenerationResult(output="response", total_duration_seconds=1.0)
+        ),
+    ]
+
+    reliability = analyze_results(results).reliability
+
+    assert reliability.longest_consecutive_failures == 2
+    assert reliability.failures_followed_by_success == 2
+    assert reliability.failures_followed_by_failure == 1
+    assert reliability.recovery_rate == pytest.approx(2.0 / 3.0)
+
+
+def test_analyze_results_excludes_final_failure_from_recovery_rate():
+    results = [
+        create_failed_run(1, 2.0),
+        create_successful_run(
+            2, 1.0, GenerationResult(output="response", total_duration_seconds=1.0)
+        ),
+        create_failed_run(3, 2.0),
+    ]
+
+    reliability = analyze_results(results).reliability
+
+    # The first failure is followed by success.
+    # The final failure has no subsequent request to evaluate.
+    assert reliability.failures_followed_by_success == 1
+    assert reliability.failures_followed_by_failure == 0
+    assert reliability.recovery_rate == 1.0
+
+
+def test_analyze_results_uses_iteration_order():
+    results = [
+        create_successful_run(
+            3, 1.0, GenerationResult(output="response", total_duration_seconds=1.0)
+        ),
+        create_failed_run(1, 2.0),
+        create_successful_run(
+            2, 1.0, GenerationResult(output="response", total_duration_seconds=1.0)
+        ),
+    ]
+
+    reliability = analyze_results(results).reliability
+
+    # Execution order is failure -> success -> success,
+    # regardless of the order in which results were supplied.
+    assert reliability.longest_consecutive_failures == 1
+    assert reliability.failures_followed_by_success == 1
+    assert reliability.failures_followed_by_failure == 0
+    assert reliability.recovery_rate == 1.0

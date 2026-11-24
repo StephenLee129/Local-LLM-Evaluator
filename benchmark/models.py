@@ -24,7 +24,7 @@ class ResourceProfile:
 
     pre_warmup: ResourceSample
     post_warmup: ResourceSample
-    
+
 
 @dataclass
 class ResourceStatistics:
@@ -92,6 +92,34 @@ class BenchmarkRunResult:
     error: BenchmarkError | None = None
     resources: ResourceStatistics | None = None
 
+    def __post_init__(self):
+        """Validate the consistency of an individual benchmark result."""
+
+        if self.iteration < 1:
+            raise ValueError("iteration must be at least 1")
+
+        if self.duration_seconds < 0:
+            raise ValueError("duration_seconds cannot be negative")
+
+        if self.status == "success":
+            if self.generation is None or self.error is not None:
+                raise ValueError(
+                    "Successful results must have a generation "
+                    "and cannot have an error."
+                )
+
+        elif self.status == "failed":
+            if self.generation is not None or self.error is None:
+                raise ValueError(
+                    "Failed results must have an error "
+                    "and cannot have a generation."
+                )
+
+        else:
+            raise ValueError(
+                f"Unsupported benchmark result status: {self.status}"
+            )
+
 
 @dataclass
 class WarmupSummary:
@@ -119,6 +147,11 @@ class ReliabilityStatistics:
     failure_rate: float
     failed_duration: MetricStatistics | None
     errors_by_category: dict[str, int]
+
+    longest_consecutive_failures: int = 0
+    failures_followed_by_success: int = 0
+    failures_followed_by_failure: int = 0
+    recovery_rate: float | None = None
 
 
 @dataclass
