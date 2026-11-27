@@ -1,4 +1,5 @@
 import math
+import re
 from dataclasses import dataclass
 
 
@@ -92,3 +93,62 @@ class EvaluationTask:
 
         if not all(isinstance(test_case, TestCase) for test_case in self.test_cases):
             raise TypeError("All test cases must be TestCase instances.")
+
+@dataclass
+class DatasetMetadata:
+    """Metadata describing an evaluation dataset."""
+
+    name: str
+    description: str
+    version: str
+
+    def __post_init__(self) -> None:
+        required_fields = {
+            "name": self.name,
+            "description": self.description,
+            "version": self.version,
+        }
+
+        for field_name, value in required_fields.items():
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(
+                    f"{field_name} must be a non-empty string."
+                )
+
+        if not re.fullmatch(
+            r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)",
+            self.version,
+        ):
+            raise ValueError(
+                "Dataset version must follow semantic versioning (MAJOR.MINOR.PATCH)."
+            )
+
+@dataclass
+class EvaluationDataset:
+    """A collection of evaluation tasks and its metadata."""
+
+    metadata: DatasetMetadata
+    tasks: list[EvaluationTask]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.metadata, DatasetMetadata):
+            raise TypeError("Dataset metadata must be DatasetMetadata.")
+
+        if not isinstance(self.tasks, list):
+            raise TypeError("Dataset tasks must be a list.")
+
+        if not self.tasks:
+            raise ValueError("An evaluation dataset must contain at least one task.")
+
+        if not all(isinstance(task, EvaluationTask) for task in self.tasks):
+            raise TypeError("All dataset tasks must be EvaluationTask instances.")
+
+        task_ids = [task.task_id for task in self.tasks]
+
+        if len(task_ids) != len(set(task_ids)):
+            raise ValueError("Dataset task IDs must be unique.")
+
+    @property
+    def task_count(self) -> int:
+        """Return the number of tasks in the dataset."""
+        return len(self.tasks)

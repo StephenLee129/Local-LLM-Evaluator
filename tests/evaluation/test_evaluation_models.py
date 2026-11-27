@@ -1,7 +1,12 @@
 import pytest
 import math
 
-from evaluation.models import EvaluationTask, TestCase as EvaluationTestCase
+from evaluation.models import (
+    DatasetMetadata,
+    EvaluationDataset,
+    EvaluationTask,
+    TestCase as EvaluationTestCase,
+)
 
 
 class TestTestCase:
@@ -172,4 +177,160 @@ class TestEvaluationTask:
                 language="python",
                 entry_point="is_palindrome",
                 test_cases=["not a test case"],
+            )
+
+class TestDatasetMetadata:
+
+    def test_accepts_valid_metadata(self):
+        metadata = DatasetMetadata(
+            name="python-basics",
+            description="Basic Python evaluation tasks.",
+            version="1.0.0",
+        )
+
+        assert metadata.name == "python-basics"
+        assert metadata.description == "Basic Python evaluation tasks."
+        assert metadata.version == "1.0.0"
+
+    @pytest.mark.parametrize(
+        "version",
+        [
+            "1",
+            "1.0",
+            "1.0.0.0",
+            "v1.0.0",
+            "1.0.x",
+            "01.0.0",
+            "-1.0.0",
+        ],
+    )
+    def test_rejects_invalid_versions(self, version):
+        with pytest.raises(ValueError, match="semantic versioning"):
+            DatasetMetadata(
+                name="python-basics",
+                description="Basic Python evaluation tasks.",
+                version=version,
+            )
+
+    @pytest.mark.parametrize(
+        "field_name",
+        ["name", "description", "version"],
+    )
+    @pytest.mark.parametrize("value", ["", "   "])
+    def test_rejects_empty_required_fields(self, field_name, value):
+        metadata = {
+            "name": "python-basics",
+            "description": "Basic Python evaluation tasks.",
+            "version": "1.0.0",
+        }
+        metadata[field_name] = value
+
+        with pytest.raises(ValueError, match=field_name):
+            DatasetMetadata(**metadata)
+
+class TestEvaluationDataset:
+
+    @pytest.fixture
+    def metadata(self):
+        return DatasetMetadata(
+            name="python-basics",
+            description="Basic Python evaluation tasks.",
+            version="1.0.0",
+        )
+
+    @pytest.fixture
+    def task(self):
+        return EvaluationTask(
+            task_id="palindrome",
+            description="Check whether a string is a palindrome.",
+            instructions="Implement a function that checks for palindromes.",
+            language="python",
+            entry_point="is_palindrome",
+            test_cases=[
+                EvaluationTestCase(
+                    input=["racecar"],
+                    expected_output=True,
+                ),
+            ],
+        )
+
+    def test_accepts_valid_dataset(self, metadata, task):
+        dataset = EvaluationDataset(
+            metadata=metadata,
+            tasks=[task],
+        )
+
+        assert dataset.metadata == metadata
+        assert dataset.tasks == [task]
+
+    def test_task_count_returns_number_of_tasks(self, metadata, task):
+        second_task = EvaluationTask(
+            task_id="reverse-string",
+            description="Reverse a string.",
+            instructions="Implement a function that reverses a string.",
+            language="python",
+            entry_point="reverse_string",
+            test_cases=[
+                EvaluationTestCase(
+                    input=["hello"],
+                    expected_output="olleh",
+                ),
+            ],
+        )
+
+        dataset = EvaluationDataset(
+            metadata=metadata,
+            tasks=[task, second_task],
+        )
+
+        assert dataset.task_count == 2
+
+    def test_rejects_invalid_metadata(self, task):
+        with pytest.raises(TypeError, match="DatasetMetadata"):
+            EvaluationDataset(
+                metadata="invalid",
+                tasks=[task],
+            )
+
+    @pytest.mark.parametrize("tasks", [None, "invalid", {}])
+    def test_rejects_non_list_tasks(self, metadata, tasks):
+        with pytest.raises(TypeError, match="must be a list"):
+            EvaluationDataset(
+                metadata=metadata,
+                tasks=tasks,
+            )
+
+    def test_rejects_empty_tasks(self, metadata):
+        with pytest.raises(ValueError, match="at least one task"):
+            EvaluationDataset(
+                metadata=metadata,
+                tasks=[],
+            )
+
+    def test_rejects_non_evaluation_task_items(self, metadata):
+        with pytest.raises(TypeError, match="EvaluationTask instances"):
+            EvaluationDataset(
+                metadata=metadata,
+                tasks=["invalid"],
+            )
+
+    def test_rejects_duplicate_task_ids(self, metadata, task):
+        duplicate_task = EvaluationTask(
+            task_id="palindrome",
+            description="Another palindrome task.",
+            instructions="Implement another palindrome function.",
+            language="python",
+            entry_point="is_palindrome",
+            test_cases=[
+                EvaluationTestCase(
+                    input=["hello"],
+                    expected_output=False,
+                ),
+            ],
+        )
+
+        with pytest.raises(ValueError, match="must be unique"):
+            EvaluationDataset(
+                metadata=metadata,
+                tasks=[task, duplicate_task],
             )

@@ -1,0 +1,5 @@
+name: python-basics
+description: >
+  A foundational Python code-generation evaluation dataset covering
+  strings, lists, dictionaries, algorithms, and recursion.
+version: "1.0.0"
