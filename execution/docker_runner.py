@@ -148,9 +148,17 @@ class DockerExecutionBackend(ExecutionBackend):
 
             duration = time.monotonic() - started_at
 
+            stdout = self._decode_output(b"".join(stdout_chunks))
+            stderr = self._decode_output(b"".join(stderr_chunks))
+
+            if self._is_docker_infrastructure_error(stderr):
+                raise ExecutionBackendError(
+                    f"Docker infrastructure failure: {stderr.strip()}"
+                )
+
             return ExecutionResult(
-                stdout=self._decode_output(b"".join(stdout_chunks)),
-                stderr=self._decode_output(b"".join(stderr_chunks)),
+                stdout=stdout,
+                stderr=stderr,
                 exit_code=exit_code,
                 duration_seconds=duration,
                 timed_out=timed_out,
@@ -162,6 +170,26 @@ class DockerExecutionBackend(ExecutionBackend):
             raise ExecutionBackendError(
                 f"Unable to execute Docker command: {exc}"
             ) from exc
+
+
+    @staticmethod
+    def _is_docker_infrastructure_error(stderr: str) -> bool:
+        """Identify failures originating from Docker rather than Python."""
+
+        infrastructure_errors = (
+            "failed to connect to the docker API",
+            "cannot connect to the docker daemon",
+            "error during connect",
+            "is the docker daemon running",
+            "the system cannot find the file specified",
+        )
+
+        normalized_stderr = stderr.lower()
+
+        return any(
+            error in normalized_stderr
+            for error in infrastructure_errors
+        )
 
     def _read_output(self, stream, chunks: list[bytes]) -> None:
         """Drain a process output stream while retaining bounded output."""

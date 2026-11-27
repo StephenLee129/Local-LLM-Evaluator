@@ -3,3 +3,5 @@ requests
 psutil
 nvidia-ml-py
 PyYAML
+fastapi
+uvicorn
