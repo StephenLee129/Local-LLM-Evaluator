@@ -86,3 +86,33 @@ def test_execute_raises_backend_error_when_docker_unavailable():
         with patch.object(backend, "_remove_container"):
             with pytest.raises(ExecutionBackendError):
                 backend.execute(ExecutionRequest(code="print(1)"))
+
+def test_execute_normalizes_stdin_and_decodes_output():
+    backend = DockerExecutionBackend()
+
+    completed = subprocess.CompletedProcess(
+        args=[],
+        returncode=0,
+        stdout=b"'worker'\n",
+        stderr=b"",
+    )
+
+    with patch(
+        "execution.docker_runner.subprocess.run",
+        return_value=completed,
+    ) as mock_run:
+        result = backend.execute(
+            ExecutionRequest(
+                code="value = input()\nprint(repr(value))",
+                stdin="worker\r\n",
+            )
+        )
+
+    # Verify Windows line endings are normalized before execution.
+    assert mock_run.call_args.kwargs["input"] == b"worker\n"
+
+    # Verify subprocess byte output is decoded into strings.
+    assert result.stdout == "'worker'\n"
+    assert result.stderr == ""
+    assert isinstance(result.stdout, str)
+    assert isinstance(result.stderr, str)

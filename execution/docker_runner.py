@@ -89,11 +89,12 @@ class DockerExecutionBackend(ExecutionBackend):
         started_at = time.monotonic()
 
         try:
+            normalized_stdin = request.stdin.replace("\r\n", "\n").replace("\r", "\n")
+
             completed = subprocess.run(
                 command,
-                input=request.stdin,
+                input=normalized_stdin.encode("utf-8"),
                 capture_output=True,
-                text=True,
                 timeout=self.EXECUTION_TIMEOUT_SECONDS,
                 check=False,
             )
@@ -101,8 +102,8 @@ class DockerExecutionBackend(ExecutionBackend):
             duration = time.monotonic() - started_at
 
             return ExecutionResult(
-                stdout=completed.stdout[: self.MAX_OUTPUT_CHARS],
-                stderr=completed.stderr[: self.MAX_OUTPUT_CHARS],
+                stdout=self._decode_output(completed.stdout)[: self.MAX_OUTPUT_CHARS],
+                stderr=self._decode_output(completed.stderr)[: self.MAX_OUTPUT_CHARS],
                 exit_code=completed.returncode,
                 duration_seconds=duration,
             )
