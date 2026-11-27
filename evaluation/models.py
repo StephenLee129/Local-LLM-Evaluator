@@ -48,6 +48,8 @@ type JSONValue = (
 class TestCase:
     """A single test case containing function arguments and expected output."""
 
+    __test__ = False
+
     input: list[JSONValue]
     expected_output: JSONValue
 
